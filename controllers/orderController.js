@@ -93,7 +93,14 @@ export const getAllOrders = async (req, res) => {
     // Add other filter keys if needed 
    console.log("filters", filters);
     const orders = await getAllOrdersService(filters);
-
+    
+    if (!orders || orders.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No orders found matching the given criteria.',
+      });
+    }
+    
     res.status(200).json({ success: true, results: orders.length, data: orders });
   } catch (error) {
     console.error('Error fetching all orders:', error);

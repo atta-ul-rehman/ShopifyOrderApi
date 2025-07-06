@@ -65,6 +65,11 @@ app.use(compression());
 app.use(cors());
 app.options('/*', cors());
 
+app.get('/', (req, res) => {
+  console.log('Your app is working!');
+  res.status(200).json({ message: 'Your app is working!' });
+});
+
 // 2) ROUTES
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/customers', customerRoutes);

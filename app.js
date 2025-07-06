@@ -9,11 +9,13 @@ import hpp from 'hpp';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
 // Routes
+import { PORT} from './config/env.js';
 import customerRoutes from './routes/customerRoutes.js';
 import productRoutes from './routes/productRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import cartRoutes from './routes/cartRoutes.js';
+import returnRoutes from './routes/returnRoutes.js';
 // import reviewRoutes from './routes/reviewRoutes.js';
 // import categoryRoutes from './routes/categoryRoutes.js';
 // import shippingRoutes from './routes/shippingRoutes.js';
@@ -65,6 +67,10 @@ app.use(compression());
 app.use(cors());
 app.options('/*', cors());
 
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
+
 app.get('/', (req, res) => {
   console.log('Your app is working!');
   res.status(200).json({ message: 'Your app is working!' });
@@ -80,6 +86,7 @@ app.use('/api/v1/cart', cartRoutes);
 // app.use('/api/v1/reviews', reviewRoutes);
 // app.use('/api/v1/categories', categoryRoutes);
 // app.use('/api/v1/shipping', shippingRoutes);
+app.use('/api/v1/returns', returnRoutes);
 app.use('/api/v1/refunds', refundRoutes);
 app.use('/api/v1/users', userRoutes);
 // 3) ERROR HANDLING

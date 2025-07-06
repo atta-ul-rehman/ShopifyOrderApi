@@ -108,6 +108,15 @@ const orderSchema = new Schema({
   updatedAt: Date,
 });
 
+// In models/Orders.js
+orderSchema.virtual('returns', {
+  ref: 'Return',
+  foreignField: 'order',
+  localField: '_id'
+});
+orderSchema.set('toObject', { virtuals: true });
+orderSchema.set('toJSON', { virtuals: true });
+
 orderSchema.pre('save', function(next) {
   this.updatedAt = new Date();
   next();
@@ -117,7 +126,8 @@ orderSchema.pre(/^find/, function(next) {
   this.populate('customer')
       .populate('items.product')
       .populate('shippingAddress')
-      .populate('payment');
+      .populate('payment')
+      .populate('returns');
   next();
 });
 

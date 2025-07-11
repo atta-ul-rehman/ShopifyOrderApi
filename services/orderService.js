@@ -123,36 +123,95 @@ export const getAllOrders = async (filters = {}) => {
   const matchStage = {};
   const email = filters['shippingAddress.email'];
   const phone = filters['shippingAddress.phone'];
+  const status = filters.status;
 
+  // Add filter for orders not older than 15 days
+  if (filters.canReturn === 'true') {
+  const fifteenDaysAgo = new Date();
+  fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+  matchStage.createdAt = { $gte: fifteenDaysAgo };
+ }
   if (filters.customer) {
     matchStage.customer = filters.customer;
   }
-
+  if (status) matchStage.status = status;
   const pipeline = [
     { $match: matchStage },
+
     {
       $lookup: {
-        from: 'shippings', // collection name in MongoDB
+        from: 'shippings',
         localField: 'shippingAddress',
         foreignField: '_id',
         as: 'shippingAddress',
       }
     },
     { $unwind: '$shippingAddress' },
+    ...(email || phone
+      ? [{
+          $match: {
+            ...(email && { 'shippingAddress.email': { $regex: email, $options: 'i' } }),
+            ...(phone && { 'shippingAddress.phone': phone })
+          }
+        }]
+      : []),
+
+    {
+      $lookup: {
+        from: 'customers',
+        localField: 'customer',
+        foreignField: '_id',
+        as: 'customer',
+      }
+    },
+    { $unwind: '$customer' },
+
+    { $unwind: '$items' },
+
+    {
+      $lookup: {
+        from: 'products',
+        localField: 'items.product',
+        foreignField: '_id',
+        as: 'items.product',
+         pipeline: [
+      {
+        $project: {
+          name: 1,
+          image: 1, // return only the first image
+        }
+      }
+    ]
+      }
+    },
+    { $unwind: '$items.product' },
+
+    {
+      $group: {
+        _id: '$_id',
+        doc: { $first: '$$ROOT' },
+        items: { $push: '$items' },
+      }
+    },
+    {
+      $addFields: {
+        'doc.items': '$items',
+      }
+    },
+    {
+      $replaceRoot: {
+        newRoot: {
+          order: '$doc',
+        },
+      }
+    },
   ];
-
-  if (email || phone) {
-    const shippingMatch = {};
-    if (email) shippingMatch['shippingAddress.email'] = { $regex: `^${email}$`, $options: 'i' };
-    if (phone) shippingMatch['shippingAddress.phone'] = phone;
-
-    pipeline.push({ $match: shippingMatch });
-  }
 
   const orders = await Order.aggregate(pipeline);
 
   return orders;
 };
+
 
 export async function trackCourierOrder(orderId) {
   const order = await Order.findById(orderId);

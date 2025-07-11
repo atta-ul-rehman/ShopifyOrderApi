@@ -17,15 +17,16 @@ export async function createReturn(data, userId) {
     throw new AppError('Return already initiated for this order.', 400);
   }
   
-  if (existingOrder.customer.toString() !== customer) {
+  if (existingOrder.customer._id.toString() !== customer) {
   throw new AppError('You are not authorized to return this order.', 403);
  }
-  const orderedProductIds = existingOrder.items.map(item => item.product.toString());
+  const orderedProductIds = existingOrder.items.map(item => item.product._id.toString());
+
   const orderItemMap = new Map();
   existingOrder.items.forEach(item => {
-    orderItemMap.set(item.product.toString(), item.quantity);
+    orderItemMap.set(item.product._id.toString(), item.quantity);
   });
-
+        console.log(orderItemMap);
   for (const item of items) {
     if (!orderedProductIds.includes(item.product)) {
       throw new AppError(`Product ${item.product} not part of the original order.`, 400);
@@ -45,8 +46,9 @@ export async function createReturn(data, userId) {
       {
         previousStatus: 'initiated',
         newStatus: 'initiated',
-        processedBy: userId || 'system',
-        actionTaken: 'Return initiated',
+        processedBy: userId || data.statusHistory[0].processedBy ||'system',
+        actionTaken: data.statusHistory[0].actionTaken || 'Return initiated',
+        notes: data.statusHistory[0].notes || '',
         processedAt: new Date(),
       }
     ]
@@ -54,12 +56,10 @@ export async function createReturn(data, userId) {
 
   return newReturn;
 }
-
 export async function getReturnById(returnId) {
   const ret = await ReturnModel.findById(returnId)
-    .populate('order')
-    .populate('customer')
-    .populate('items.product');
+    .populate('customer', 'name email phone')
+    .populate('items.product', 'name price images');
 
   if (!ret) throw new AppError('Return not found', 404);
   return ret;

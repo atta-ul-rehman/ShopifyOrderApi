@@ -1,6 +1,7 @@
 import ReturnModel from '../models/Returns.js';
 import Order from '../models/Orders.js';
 import AppError from '../utils/appError.js';
+import Product from '../models/Products.js';
 
 export async function createReturn(data, userId) {
   const { order, customer, items } = data;
@@ -83,9 +84,9 @@ export async function createReturn(data, userId) {
       {
         previousStatus: 'initiated',
         newStatus: 'initiated',
-        processedBy: userId || 'system',
+        processedBy: data.statusHistory[0].processedBy,
         actionTaken: 'Return initiated',
-        notes: data.notes || 'Return initiated by customer',
+        notes: data.statusHistory[0].notes || 'Return initiated by customer',
         processedAt: new Date(),
         itemsProcessed: itemsWithNames
       }

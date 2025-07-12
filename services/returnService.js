@@ -12,30 +12,67 @@ export async function createReturn(data, userId) {
     throw new AppError('Cannot initiate return: order has not been delivered yet.', 400);
   }
 
-//   const existingReturn = await ReturnModel.findOne({ order });
-  if (existingOrder.returns && existingOrder.returns.length > 0) {
-    throw new AppError('Return already initiated for this order.', 400);
-  }
-  
   if (existingOrder.customer._id.toString() !== customer) {
-  throw new AppError('You are not authorized to return this order.', 403);
- }
-  const orderedProductIds = existingOrder.items.map(item => item.product._id.toString());
+    throw new AppError('You are not authorized to return this order.', 403);
+  }
 
+  // Get all existing returns for this order
+  const existingReturns = await ReturnModel.find({ order });
+  
+  // Create maps for original order items
+  const orderedProductIds = existingOrder.items.map(item => item.product._id.toString());
   const orderItemMap = new Map();
   existingOrder.items.forEach(item => {
     orderItemMap.set(item.product._id.toString(), item.quantity);
   });
-        console.log(orderItemMap);
+
+  // Create map for already returned quantities
+  const returnedQuantityMap = new Map();
+  existingReturns.forEach(returnDoc => {
+    returnDoc.items.forEach(item => {
+      const productId = item.product.toString();
+      const currentReturned = returnedQuantityMap.get(productId) || 0;
+      returnedQuantityMap.set(productId, currentReturned + item.quantity);
+    });
+  });
+
+  // Validate items being returned
   for (const item of items) {
     if (!orderedProductIds.includes(item.product)) {
       throw new AppError(`Product ${item.product} not part of the original order.`, 400);
     }
+
     const orderedQty = orderItemMap.get(item.product);
-    if (!orderedQty || item.quantity > orderedQty) {
-      throw new AppError(`Cannot return more than ordered quantity for product ${item.product}`, 400);
+    const alreadyReturnedQty = returnedQuantityMap.get(item.product) || 0;
+    const availableToReturn = orderedQty - alreadyReturnedQty;
+
+    if (item.quantity > availableToReturn) {
+      throw new AppError(
+        `Cannot return ${item.quantity} units of product ${item.product}. ` +
+        `Only ${availableToReturn} units available to return (${orderedQty} ordered, ${alreadyReturnedQty} already returned).`,
+        400
+      );
     }
   }
+
+  // Get product details for status history
+  const productIds = items.map(item => item.product);
+  const products = await Product.find({ _id: { $in: productIds } });
+  const productMap = new Map();
+  products.forEach(product => {
+    productMap.set(product._id.toString(), product);
+  });
+
+  // Create items with product names for status history
+  const itemsWithNames = items.map(item => {
+    const product = productMap.get(item.product);
+    return {
+      product: item.product,
+      productName: product ? product.name : 'Unknown Product',
+      quantity: item.quantity,
+      reason: item.reason
+    };
+  });
 
   const newReturn = await ReturnModel.create({
     order,
@@ -46,10 +83,11 @@ export async function createReturn(data, userId) {
       {
         previousStatus: 'initiated',
         newStatus: 'initiated',
-        processedBy: userId || data.statusHistory[0].processedBy ||'system',
-        actionTaken: data.statusHistory[0].actionTaken || 'Return initiated',
-        notes: data.statusHistory[0].notes || '',
+        processedBy: userId || 'system',
+        actionTaken: 'Return initiated',
+        notes: data.notes || 'Return initiated by customer',
         processedAt: new Date(),
+        itemsProcessed: itemsWithNames
       }
     ]
   });
@@ -86,4 +124,58 @@ export async function updateReturnStatus(returnId, newStatus, userId, note = '')
 
 export async function getReturnsByCustomer(customerId) {
   return ReturnModel.find({ customer: customerId });
+}
+
+
+// export async function getReturnsByCustomer(customerId) {
+//   return ReturnModel.find({ customer: customerId })
+//     .populate('customer', 'name email phone')
+//     .populate('items.product', 'name price images');
+// }
+
+export async function getReturnsByOrder(orderId) {
+  return ReturnModel.find({ order: orderId })
+    .populate('customer', 'name email phone')
+    .populate('items.product', 'name price images');
+}
+
+// New function to get return summary for an order
+export async function getOrderReturnSummaryService(orderId) {
+  const existingOrder = await Order.findById(orderId);
+  if (!existingOrder) throw new AppError('Order not found', 404);
+
+  const returns = await ReturnModel.find({ order: orderId })
+    .populate('items.product', 'name price');
+
+  // Calculate returned quantities per product
+  const returnedQuantityMap = new Map();
+  const returnSummary = [];
+
+  returns.forEach(returnDoc => {
+    returnDoc.items.forEach(item => {
+      const productId = item.product._id.toString();
+      const currentReturned = returnedQuantityMap.get(productId) || 0;
+      returnedQuantityMap.set(productId, currentReturned + item.quantity);
+    });
+  });
+
+  // Create summary with original order items
+  existingOrder.items.forEach(orderItem => {
+    const productId = orderItem.product._id.toString();
+    const returnedQty = returnedQuantityMap.get(productId) || 0;
+    const availableToReturn = orderItem.quantity - returnedQty;
+
+    returnSummary.push({
+      product: orderItem.product,
+      orderedQuantity: orderItem.quantity,
+      returnedQuantity: returnedQty,
+      availableToReturn: availableToReturn
+    });
+  });
+
+  return {
+    order: existingOrder,
+    returns: returns,
+    returnSummary: returnSummary
+  };
 }

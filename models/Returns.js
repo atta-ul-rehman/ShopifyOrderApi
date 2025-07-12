@@ -22,6 +22,12 @@ const returnStatusHistorySchema = new mongoose.Schema({
   },
   notes: String,
   actionTaken: String,
+  itemsProcessed: [{
+    product: { type: mongoose.Schema.ObjectId, ref: 'Product' },
+    productName: String,
+    quantity: Number,
+    reason: String
+  }]
 });
 
 const returnSchema = new mongoose.Schema({

@@ -2,7 +2,9 @@ import {
   createReturn,
   getReturnById,
   updateReturnStatus,
-  getReturnsByCustomer
+  getReturnsByCustomer,
+  getReturnsByOrder,
+  getOrderReturnSummaryService  
 } from '../services/returnService.js';
 
 import catchAsync from '../utils/catchAsync.js';
@@ -54,5 +56,36 @@ export const getCustomerReturns = catchAsync(async (req, res, next) => {
     status: 'success',
     results: returns.length,
     data: { returns },
+  });
+});
+
+export const getOrderReturns = catchAsync(async (req, res, next) => {
+  const { orderId } = req.params;
+  
+  if (!isValidObjectId(orderId)) {
+    return res.status(400).json({ status: 'fail', message: 'Invalid order ID' });
+  }
+
+  const returns = await getReturnsByOrder(orderId);
+
+  res.status(200).json({
+    status: 'success',
+    results: returns.length,
+    data: { returns },
+  });
+});
+
+export const getOrderReturnSummary = catchAsync(async (req, res, next) => {
+  const { orderId } = req.params;
+  
+  if (!isValidObjectId(orderId)) {
+    return res.status(400).json({ status: 'fail', message: 'Invalid order ID' });
+  }
+
+  const summary = await getOrderReturnSummaryService(orderId);
+
+  res.status(200).json({
+    status: 'success',
+    data: summary,
   });
 });

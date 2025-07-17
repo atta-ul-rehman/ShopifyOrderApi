@@ -178,7 +178,7 @@ export const getAllOrders = async (filters = {}) => {
       {
         $project: {
           name: 1,
-          image: 1, // return only the first image
+          image: { $arrayElemAt: ["$images", 0] }, // return only the first image
         }
       }
     ]

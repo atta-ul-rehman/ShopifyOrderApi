@@ -7,7 +7,7 @@ import {
   getAllOrdersWithPopulate as getAllOrdersService,
   getOrderByIdWithPopulate
 } from '../services/orderService.js';
-import OrderSearchService from '../services/orderSearchService.js';
+
 import mongoose from 'mongoose';
 
 import {

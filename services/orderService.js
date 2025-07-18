@@ -305,10 +305,12 @@ export const getOrderByIdWithPopulate = async (orderId, options = {}) => {
       select: 'items reason status refundAmount createdAt updatedAt processedAt'
     });
   }
-
-  // Note: Refunds would need to be handled differently as it's not a direct relationship
-  // You might need to do a separate query for refunds
-
+  if (includeRefunds) {
+    populateOptions.push({
+      path: 'refunds',
+      select: 'items status amount createdAt receiptImage'
+    });
+  }
   // Apply all populate options
   if (populateOptions.length > 0) {
     query = query.populate(populateOptions);
@@ -316,18 +318,30 @@ export const getOrderByIdWithPopulate = async (orderId, options = {}) => {
 
   const order = await query;
 
-  // If refunds are requested, fetch them separately
-  if (includeRefunds && order) {
-    const refunds = await Refund.find({ order: orderId })
-      .select('amount reason status refundMethod createdAt processedAt');
-    order.refunds = refunds;
-  }
-
-  // Remove items if not requested
-  if (!includeItems && order && order.items) {
+  if (!options.includeItems && order.items) {
     order.items = undefined;
   }
-
+  // Remove returns if not requested
+  if (!options.includeReturns && order.returns) {
+    order.returns = undefined;
+  }
+  // Remove refunds if not requested
+  if (!options.includeRefunds && order.refunds) {
+    order.refunds = undefined;
+  }
+  // Remove customer if not requested
+  if (!options.includeCustomer && order.customer) {
+    order.customer = undefined;
+  }
+  // Remove shippingAddress if not requested
+  if (!options.includeShippingAddress && order.shippingAddress) {
+    order.shippingAddress = undefined;
+  }
+  // Remove payment if not requested
+  if (!options.includePayment && order.payment) {
+    order.payment = undefined;
+  }
+  
   return order;
 };
 
@@ -380,7 +394,13 @@ export const getAllOrdersWithPopulate = async (filters = {}, options = {}) => {
   if (options.includeReturns) {
     populateOptions.push({
       path: 'returns',
-      select: 'items reason status refundAmount createdAt updatedAt processedAt'
+      select: 'items status createdAt updatedAt processedAt'
+    });
+  }
+  if (options.includeRefunds) {
+    populateOptions.push({
+      path: 'refunds',
+      select: 'items status amount createdAt receiptImage'
     });
   }
   if (populateOptions.length > 0) {
@@ -390,15 +410,6 @@ export const getAllOrdersWithPopulate = async (filters = {}, options = {}) => {
   // For each order, handle refunds and remove fields as needed
   const result = await Promise.all(orders.map(async (order) => {
     // If refunds are requested, fetch them
-    if (options.includeRefunds) {
-      const refunds = await Refund.find({ order: order._id })
-        .select('amount reason status refundMethod createdAt processedAt');
-      order = order.toObject();
-      order.refunds = refunds;
-    } else {
-      order = order.toObject();
-      order.refunds = undefined;
-    }
     // Remove items if not requested
     if (!options.includeItems && order.items) {
       order.items = undefined;
@@ -406,6 +417,10 @@ export const getAllOrdersWithPopulate = async (filters = {}, options = {}) => {
     // Remove returns if not requested
     if (!options.includeReturns && order.returns) {
       order.returns = undefined;
+    }
+    // Remove refunds if not requested
+    if (!options.includeRefunds && order.refunds) {
+      order.refunds = undefined;
     }
     // Remove customer if not requested
     if (!options.includeCustomer && order.customer) {

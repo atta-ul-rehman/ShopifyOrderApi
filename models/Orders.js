@@ -114,6 +114,13 @@ orderSchema.virtual('returns', {
   foreignField: 'order',
   localField: '_id'
 });
+
+orderSchema.virtual('refunds', {
+  ref: 'Refund',
+  foreignField: 'order',
+  localField: '_id'
+});
+
 orderSchema.set('toObject', { virtuals: true });
 orderSchema.set('toJSON', { virtuals: true });
 
@@ -122,13 +129,23 @@ orderSchema.pre('save', function(next) {
   next();
 });
 
+// Modified pre-hook to be conditional
+// Only auto-populate if the query doesn't have a 'skipAutoPopulate' option
 orderSchema.pre(/^find/, function(next) {
+  // Check if we should skip auto-population
+  if (this.getOptions().skipAutoPopulate) {
+    return next();
+  }
+  
+  // Default behavior - populate everything
   this.populate('customer')
       .populate('items.product')
       .populate('shippingAddress')
       .populate('payment')
-      .populate('returns');
+      .populate('returns')
+      .populate('refunds');
   next();
 });
+
 
 export default model('Order', orderSchema);

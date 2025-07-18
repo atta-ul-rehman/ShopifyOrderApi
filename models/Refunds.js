@@ -70,6 +70,17 @@ const refundSchema = new Schema({
       message: 'processedAt can only be set if status is approved, rejected, or processed',
     }
   },
+  receiptImage: {
+    type: String, // URL or file path to the receipt image
+    validate: {
+      validator: function(value) {
+        // receiptImage should only be set if status is 'processed'
+        if (value && this.status !== 'processed') return false;
+        return true;
+      },
+      message: 'Receipt image can only be added when refund status is processed',
+    }
+  },
   statusHistory: [statusHistorySchema],
 
   createdAt: {

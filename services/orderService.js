@@ -3,6 +3,7 @@ import axios from 'axios';
 import Product from '../models/Products.js';
 import Payment from '../models/Payments.js';
 import Shipping from '../models/Shippings.js';
+import Refund from '../models/Refunds.js';
 import AppError from '../utils/appError.js';
 import { createCustomer } from './customerService.js';
 // import { updateInventoryOnOrder } from './inventoryService.js';
@@ -65,7 +66,9 @@ export async function createOrder(orderData) {
 }
 
 export async function getOrderById(orderId) {
-  const order = await Order.findById(orderId);
+  const order = await Order.findById(orderId)
+    .populate('returns')
+    .populate('refunds');
   if (!order) {
     throw new AppError('No order found with that ID', 404);
   }
@@ -119,6 +122,7 @@ export async function processPaymentForOrder(orderId, paymentData) {
 
   return payment;
 }
+
 export const getAllOrders = async (filters = {}) => {
   const matchStage = {};
   const email = filters['shippingAddress.email'];
@@ -212,7 +216,6 @@ export const getAllOrders = async (filters = {}) => {
   return orders;
 };
 
-
 export async function trackCourierOrder(orderId) {
   const order = await Order.findById(orderId);
 
@@ -251,3 +254,173 @@ export async function trackCourierOrder(orderId) {
     throw new AppError('Failed to fetch tracking info from courier API', 500);
   }
 }
+
+// Alternative approach using Mongoose populate (simpler but less control)
+export const getOrderByIdWithPopulate = async (orderId, options = {}) => {
+  const {
+    includeItems = false,
+    includeRefunds = false,
+    includeReturns = false,
+    includeCustomer = false,
+    includeShippingAddress = false,
+    includePayment = false
+  } = options;
+
+  let query = Order.findById(orderId).setOptions({ skipAutoPopulate: true });
+
+  // Build populate array based on options
+  const populateOptions = [];
+
+  if (includeCustomer) {
+    populateOptions.push({
+      path: 'customer',
+      select: 'name email phone isRegistered role createdAt'
+    });
+  }
+
+  if (includeShippingAddress) {
+    populateOptions.push({
+      path: 'shippingAddress',
+      select: 'address city state country postalCode email phone isDefault isValidated validationResult'
+    });
+  }
+
+  if (includePayment) {
+    populateOptions.push({
+      path: 'payment',
+      select: 'method amount status transactionId createdAt'
+    });
+  }
+
+  if (includeItems) {
+    populateOptions.push({
+      path: 'items.product',
+      select: 'name description price stock images categories averageRating numReviews'
+    });
+  }
+
+  if (includeReturns) {
+    populateOptions.push({
+      path: 'returns',
+      select: 'items reason status refundAmount createdAt updatedAt processedAt'
+    });
+  }
+
+  // Note: Refunds would need to be handled differently as it's not a direct relationship
+  // You might need to do a separate query for refunds
+
+  // Apply all populate options
+  if (populateOptions.length > 0) {
+    query = query.populate(populateOptions);
+  }
+
+  const order = await query;
+
+  // If refunds are requested, fetch them separately
+  if (includeRefunds && order) {
+    const refunds = await Refund.find({ order: orderId })
+      .select('amount reason status refundMethod createdAt processedAt');
+    order.refunds = refunds;
+  }
+
+  // Remove items if not requested
+  if (!includeItems && order && order.items) {
+    order.items = undefined;
+  }
+
+  return order;
+};
+
+export const getAllOrdersWithPopulate = async (filters = {}, options = {}) => {
+  // Reuse the filter logic from getAllOrders
+  const matchStage = {};
+  const email = filters['shippingAddress.email'];
+  const phone = filters['shippingAddress.phone'];
+  const status = filters.status;
+
+  if (filters.canReturn === 'true') {
+    const fifteenDaysAgo = new Date();
+    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+    matchStage.createdAt = { $gte: fifteenDaysAgo };
+  }
+  if (filters.customer) {
+    matchStage.customer = filters.customer;
+  }
+  if (status) matchStage.status = status;
+
+  // Find all orders matching the filters
+  let orders = await Order.find(matchStage).setOptions({ skipAutoPopulate: true });
+
+  // Build populate array based on options
+  const populateOptions = [];
+  if (options.includeCustomer) {
+    populateOptions.push({
+      path: 'customer',
+      select: 'name email phone isRegistered role createdAt'
+    });
+  }
+  if (options.includeShippingAddress) {
+    populateOptions.push({
+      path: 'shippingAddress',
+      select: 'address city state country postalCode email phone isDefault isValidated validationResult'
+    });
+  }
+  if (options.includePayment) {
+    populateOptions.push({
+      path: 'payment',
+      select: 'method amount status transactionId createdAt'
+    });
+  }
+  if (options.includeItems) {
+    populateOptions.push({
+      path: 'items.product',
+      select: 'name description price stock images categories averageRating numReviews'
+    });
+  }
+  if (options.includeReturns) {
+    populateOptions.push({
+      path: 'returns',
+      select: 'items reason status refundAmount createdAt updatedAt processedAt'
+    });
+  }
+  if (populateOptions.length > 0) {
+    orders = await Order.populate(orders, populateOptions);
+  }
+
+  // For each order, handle refunds and remove fields as needed
+  const result = await Promise.all(orders.map(async (order) => {
+    // If refunds are requested, fetch them
+    if (options.includeRefunds) {
+      const refunds = await Refund.find({ order: order._id })
+        .select('amount reason status refundMethod createdAt processedAt');
+      order = order.toObject();
+      order.refunds = refunds;
+    } else {
+      order = order.toObject();
+      order.refunds = undefined;
+    }
+    // Remove items if not requested
+    if (!options.includeItems && order.items) {
+      order.items = undefined;
+    }
+    // Remove returns if not requested
+    if (!options.includeReturns && order.returns) {
+      order.returns = undefined;
+    }
+    // Remove customer if not requested
+    if (!options.includeCustomer && order.customer) {
+      order.customer = undefined;
+    }
+    // Remove shippingAddress if not requested
+    if (!options.includeShippingAddress && order.shippingAddress) {
+      order.shippingAddress = undefined;
+    }
+    // Remove payment if not requested
+    if (!options.includePayment && order.payment) {
+      order.payment = undefined;
+    }
+    return order;
+  }));
+
+  return result;
+};

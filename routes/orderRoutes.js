@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import { createOrder, getOrder, updateOrderStatus, getCustomerOrders, getOrderTracking, getAllOrders } from '../controllers/orderController.js';
+import { createOrder, getOrder, updateOrderStatus, getCustomerOrders, getOrderTracking, getAllOrders, getOrderWithFilters } from '../controllers/orderController.js';
 import { processPayment } from '../controllers/paymentController.js';
 
 const router = Router();
+
 router
   .route('/customer/:customerId')
   .get(getCustomerOrders);
@@ -13,7 +14,7 @@ router
 
 router
   .route('/:id')
-  .get(getOrder)
+  .get(getOrderWithFilters)
   .patch(updateOrderStatus);
 router
   .route('/:orderId/tracking')

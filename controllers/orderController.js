@@ -17,8 +17,6 @@ import {
 import AppError from '../utils/appError.js';
 import catchAsync from '../utils/catchAsync.js';
 
-const orderService = new OrderSearchService();
-
 export const createOrder = catchAsync(async (req, res, next) => {
   const order = await createOrderService(req.body);
   res.status(201).json({

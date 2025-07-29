@@ -150,6 +150,7 @@ export const getOrderWithFilters = async (req, res) => {
 
     res.status(200).json({
       success: true,
+      results: 1,
       data: {
         order
       }

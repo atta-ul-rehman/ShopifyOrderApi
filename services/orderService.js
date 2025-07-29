@@ -302,7 +302,7 @@ export const getOrderByIdWithPopulate = async (orderId, options = {}) => {
   if (includeReturns) {
     populateOptions.push({
       path: 'returns',
-      select: 'items reason status refundAmount createdAt updatedAt processedAt'
+      select: 'items status createdAt '
     });
   }
   if (includeRefunds) {

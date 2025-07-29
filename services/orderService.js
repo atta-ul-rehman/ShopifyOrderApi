@@ -6,6 +6,8 @@ import Shipping from '../models/Shippings.js';
 import Refund from '../models/Refunds.js';
 import AppError from '../utils/appError.js';
 import { createCustomer } from './customerService.js';
+import mongoose from 'mongoose';
+
 // import { updateInventoryOnOrder } from './inventoryService.js';
 
 export async function createOrder(orderData) {
@@ -352,19 +354,53 @@ export const getAllOrdersWithPopulate = async (filters = {}, options = {}) => {
   const phone = filters['shippingAddress.phone'];
   const status = filters.status;
 
-  if (filters.canReturn === 'true') {
-    const fifteenDaysAgo = new Date();
-    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
-    matchStage.createdAt = { $gte: fifteenDaysAgo };
-  }
-  if (filters.customer) {
-    matchStage.customer = filters.customer;
-  }
-  if (status) matchStage.status = status;
+  const pipeline = [
+  {
+    $lookup: {
+      from: 'shippings', // collection name (lowercase + pluralized)
+      localField: 'shippingAddress',
+      foreignField: '_id',
+      as: 'shippingAddress'
+    }
+  },
+  { $unwind: '$shippingAddress' },
+];
 
-  // Find all orders matching the filters
-  let orders = await Order.find(matchStage).setOptions({ skipAutoPopulate: true });
+// Add email/phone filters
+if (email) {
+  pipeline.push({
+    $match: {
+      'shippingAddress.email': email
+    }
+  });
+}
+if (phone) {
+  pipeline.push({
+    $match: {
+      'shippingAddress.phone': phone
+    }
+  });
+}  
+if (filters.customer) {
+  pipeline.push({ $match: { name : customer }});
+}
+if (filters.status) {
+  pipeline.push({ $match: { status: filters.status } });
+}
+if (filters.id) {
+  pipeline.push({ $match: { _id: new mongoose.Types.ObjectId(filters.id) } });
+}
+if (filters.canReturn === 'true') {
+  const fifteenDaysAgo = new Date();
+  fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+  pipeline.push({
+    $match: { createdAt: { $gte: fifteenDaysAgo } }
+  });
+}
+// Find all orders matching the filters
+let orders = await Order.aggregate(pipeline);
 
+console.log('DEBUG - Direct DB match count:', orders);
   // Build populate array based on options
   const populateOptions = [];
   if (options.includeCustomer) {

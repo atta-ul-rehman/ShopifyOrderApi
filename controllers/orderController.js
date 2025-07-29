@@ -93,12 +93,10 @@ export const getAllOrders = async (req, res) => {
 
     if (req.query.email) filters['shippingAddress.email'] = req.query.email;
     if (req.query.phone) filters['shippingAddress.phone'] = req.query.phone;
+    if (req.query.id) filters.id = req.query.id;
     if (req.query.customer) filters.customer = req.query.customer;
     if (req.query.status) filters.status = req.query.status;
     if (req.query.canReturn) filters.canReturn = req.query.canReturn;
-    // Add other filter keys if needed 
-    console.log("filters", filters);
-
     // Parse include* options from query
     const options = {
       includeItems: req.query.includeItems === 'true',
@@ -151,9 +149,9 @@ export const getOrderWithFilters = async (req, res) => {
     res.status(200).json({
       success: true,
       results: 1,
-      data: {
+      data: [
         order
-      }
+      ]
     });
   } catch (error) {
     res.status(500).json({
